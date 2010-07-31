@@ -20,6 +20,7 @@ my $nextoffline;
 my $debug;
 my $verbose = 0;
 my $help = 0;
+my $man = 0;
 GetOptions(
   'url=s' => \$next,
   'd=s' => \$datadapper,
@@ -30,11 +31,15 @@ GetOptions(
   'next' => \$nextoffline,
   'debug' => \$debug,
   'v' => \$verbose,
-  'h' => \$help
+  'h' => \$help,
+  'man' => \$man
 ) or pod2usage(1); #print usage and exit with a 1
 if ($help) {
   pod2usage(0)
 }; #exit with a 0 and print the usage if -h is passed
+if ($man) {
+  pod2usage(-verbose => 2)
+}; #display man
 
 my $yql = WebService::YQL->new;
 my $xs = XML::Simple->new();
@@ -158,18 +163,17 @@ deepdapper - perform a deepdapper webquery, based on the deepdapper YQL Open Tab
 
 deepdapper [options] [url]
 
-Options:
--d <dapper> name of the datadapper;
--l <dapper> name of the listdapper;
--n <dapper> name of the nextdapper;
--nextcount <value> number of next pages to process (default=infinite);
--list perform list extraction offline;
--next perform next page extraction offline;
--v verbose;
--debug turn on debug messages;
--h print help/usage
-
-=back
+ Options:
+  -d <dapper>         name of the datadapper;
+  -l <dapper>         name of the listdapper;
+  -n <dapper>         name of the nextdapper;
+  -nextcount <value>  number of next pages to process (default=infinite);
+  -list               perform list extraction offline;
+  -next               perform next page extraction offline;
+  -v                  verbose;
+  -debug              turn on debug messages;
+  -h                  print help/usage
+  -man                display man pages
 
 =head1 DESCRIPTION
 
