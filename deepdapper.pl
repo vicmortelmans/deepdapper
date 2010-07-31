@@ -10,23 +10,25 @@ use Pod::Usage;
 use Data::Dumper;
 
 # read the command line options
+my $next;
 my $datadapper;
 my $listdapper;
 my $nextdapper;
-my $nextcount = 1000; // very very large
+my $nextcount = 1000; # very very large
 my $listoffline;
 my $nextoffline;
 my $debug;
 my $verbose = 0;
 my $help = 0;
 GetOptions(
+  'url=s' => \$next,
   'd=s' => \$datadapper,
   'l=s' => \$listdapper,
   'n=s' => \$nextdapper,
   'nextcount=i' => \$nextcount,
   'list' => \$listoffline,
   'next' => \$nextoffline,
-  'd' => \$debug,
+  'debug' => \$debug,
   'v' => \$verbose,
   'h' => \$help
 ) or pod2usage(1); #print usage and exit with a 1
@@ -35,8 +37,10 @@ if ($help) {
 }; #exit with a 0 and print the usage if -h is passed
 
 my $yql = WebService::YQL->new;
+my $xs = XML::Simple->new();
 
-my $data = { 'item' => [] };
+my $data = { 'data' => [] };
+push( @{ $data->{'data'} }, {'item' => []});
 #<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 #<data>
 #    <item dataType="RawString" fieldName="item" href="http://developer.yahoo.net/forum/index.php?showtopic=3308" originalElement="a" type="field">New Elance YDN Section</item>
@@ -64,8 +68,6 @@ my $data = { 'item' => [] };
 #                  ]
 #        };
 
-my $next = $shift;
-
 while ($next && $nextcount-- > 0) {
   if ($listdapper && $listoffline) {
     my $listdata;
@@ -75,52 +77,77 @@ while ($next && $nextcount-- > 0) {
     else {
       $listdata = deepdapperyql("select * from deepdapper where url='$next' and datadapper='$listdapper'");
     }
-    print Dumper($listdata);
-    for my $dataurl ( @{ $listdata->{'query'}{'results'}{'data'}{'item'} } ) { //TODO
+#    print STDERR Dumper($listdata);
+    for my $dataurl ( @{ path($listdata, ['query','results','data','item']) } ) {
       my $newdata = deepdapperyql("select * from deepdapper where url='$dataurl->{'href'}' and datadapper='$datadapper'");
-      push($data->{'item'},{ $newdata->{'query'}{'results'}{'data'}{'item'} });
+      push(@{ $data->{'data'}->[0]->{'item'} }, @{path($newdata, ['query','results','data','item'])} );
     }
   } 
   elsif ($listdapper && !$listoffline) {
     my $newdata;
     if ($nextdapper && !$nextoffline) {
-      $newdata = deepdapperyql("select * from deepdapper where url='$dataurl->{'href'}' and listdapper='$listdapper' and nextdapper='$nextdapper' and datadapper='$datadapper'");
+      $newdata = deepdapperyql("select * from deepdapper where url='$next' and listdapper='$listdapper' and nextdapper='$nextdapper' and datadapper='$datadapper'");
     }
     else {
-      $newdata = deepdapperyql("select * from deepdapper where url='$dataurl->{'href'}' and listdapper='$listdapper' and datadapper='$datadapper'");
+      $newdata = deepdapperyql("select * from deepdapper where url='$next' and listdapper='$listdapper' and datadapper='$datadapper'");
     }
-    push($data->{'item'},{ $newdata->{'query'}{'results'}{'data'}{'item'} });
+    push(@{ $data->{'data'}->[0]->{'item'} }, @{path($newdata, ['query','results','data','item'])} );
   }
   else {
     my $newdata;
     if ($nextdapper && !$nextoffline) {
-      $newdata = deepdapperyql("select * from deepdapper where url='$dataurl->{'href'}' and nextdapper='$nextdapper' and datadapper='$datadapper'");
+      $newdata = deepdapperyql("select * from deepdapper where url='$next' and nextdapper='$nextdapper' and datadapper='$datadapper'");
     }
     else {
-      $newdata = deepdapperyql("select * from deepdapper where url='$dataurl->{'href'}' and datadapper='$datadapper'");
+      $newdata = deepdapperyql("select * from deepdapper where url='$next' and datadapper='$datadapper'");
     }
-    push($data->{'item'},{ $newdata->{'query'}{'results'}{'data'}{'item'} });
+    push(@{ $data->{'data'}->[0]->{'item'} }, @{path($newdata, ['query','results','data','item'])} );
   }
   if ($nextdapper && $nextoffline) {
-    $nextdata = deepdapperyql("select * from deepdapper where url='$dataurl->{'href'}' and datadapper='$nextdapper'");
-    $next = $nextdata->{'query'}{'results'}{'data'}{'item'}[0]{'href'};
+    my $nextdata = deepdapperyql("select * from deepdapper where url='$next' and datadapper='$nextdapper'");
+    $next = path($nextdata, ['query','results','data','item','href']);
+    $next = (ref($next) eq "ARRAY")?undef:$next;
   }
   else {
-    $next = '';
+    $next = undef;
   }
 }
 
-print $xs->XMLout($data);
+print $xs->XMLout($data, KeepRoot => 1);
 
 sub deepdapperyql {
   my $usedeepdapper = "use 'http://github.com/vicmortelmans/yql-tables/raw/master/data/deepdapper.xml' as deepdapper;";
-  my $qs = $usedeepdapper + @_;
+  my $qs = $usedeepdapper . $_[0];
   if ($verbose) {print STDERR "$qs\n"}
   my $qd = $yql->query($qs);
-  if ($debug) {print STDERR Dumper($xs->XMLout($qd)}
+  if ($debug) {print STDERR Dumper($xs->XMLout($qd))}
   return $qd;
 }
 
+sub path {
+  # returns an array containing hash references or a scalar value
+  my $data = [ $_[0] ];
+  my $keys = $_[1];
+  my $done = 0;
+  while ((my $key = shift(@{ $keys })) && !$done) {
+    if (! exists $data->[0]->{$key}) {
+      $data = [];
+      $done = 1;
+    } elsif ( ref($data->[0]->{$key}) eq "ARRAY" ) {
+      $data = $data->[0]->{$key};
+    } elsif ( ref($data->[0]->{$key}) eq "HASH" ) {   
+      $data = [ $data->[0]->{$key} ];
+    } else {
+      if ( @{ $keys } > 0 ) {
+        $data = [];  # leaf node reached, but still keys pending
+      } else {
+        $data = $data->[0]->{$key};  # scalar node value
+      }
+      $done = 1;
+    }
+  }
+  return $data;
+}
 __END__
 
 =head1 NAME
@@ -139,7 +166,7 @@ Options:
 -list perform list extraction offline;
 -next perform next page extraction offline;
 -v verbose;
--d turn on debug messages;
+-debug turn on debug messages;
 -h print help/usage
 
 =back
