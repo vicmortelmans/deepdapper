@@ -165,7 +165,7 @@ sub deepdapperyql {
 	eval { $qd = $yql->query($qs); };
 	if ($@) {
 		print STDERR "Error retrieving data from YQL: "
-		  . $@->getMessage() . "\n";
+		  . $@ . "\n";
 	}
 	if ($debug) { print STDERR Dumper( $xs->XMLout($qd) ) }
 	return $qd;
@@ -217,7 +217,7 @@ deepdapper.pl - perform a deepdapper webquery, based on the deepdapper YQL Open 
 
 =head1 SYNOPSIS
 
-deepdapper.pl [options] [url]
+deepdapper.pl [options] -url [url]
 
  Options:
   -d <dapper>         name of the datadapper;
