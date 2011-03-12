@@ -162,14 +162,35 @@ sub deepdapperyql {
 	my $qs = $usedeepdapper . $_[0];
 	if ($verbose) { print STDERR "$qs\n" };
 	my $qd;
-	eval { $qd = $yql->query($qs); };
-	if ($@) {
-		print STDERR "Error retrieving data from YQL: "
-		  . $@ . "\n";
-	}
-	if ($debug) { print STDERR Dumper( $xs->XMLout($qd) ) }
+  my $retries = 0;
+  do {
+    if ($retries ) {
+      if ($verbose) { print STDERR "Sleeping before retry #" . $retries . "...\n" };
+      sleep 5;
+    }
+    eval { $qd = $yql->query($qs); };
+    if ($@) {
+      print STDERR "Error retrieving data from YQL: "
+        . $@ . "\n";
+    }
+    if ($debug) { print STDERR Dumper( $xs->XMLout($qd) ) };
+    $retries++;
+  } until ( validateRecord($qd) > 0 || $retries > 3 );
+  if ( $retries > 3 ) {
+    print STDERR "Fatal error: data could not be retrieved for query " . $qs . "\n";
+    print STDERR "(Don't worry if this is the final nextquery)";
+  }
 	return $qd;
 }
+
+sub validateRecord {
+	( my $data ) = @_;
+	my $item = path( $data, [ 'query', 'results', 'data', 'item' ] );
+  if ($verbose) { print STDERR "Number of items : " . Dumper( scalar @{$item} ) . "\n" };
+  if ($debug) { print STDERR Dumper( $item ) };
+	return scalar @{$item};
+}
+
 
 sub pushRecord {
 	( my $data, my $newdata, my $url ) = @_;
